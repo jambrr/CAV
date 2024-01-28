@@ -8,6 +8,7 @@ from control.controllers import SteeringAngleController, ThrottleBrakeController
 
 class DBWNode(object):
     def __init__(self):
+        print('DBW running')
         rospy.init_node('dbw_node')
         vehicle_mass = rospy.get_param('~vehicle_mass', 1736.35)
         deceleration_limit = rospy.get_param('~decel_limit', -5)
@@ -24,6 +25,9 @@ class DBWNode(object):
         self.throttle_pub = rospy.Publisher('/vehicle/throttle_cmd', ThrottleCmd, queue_size=1)
         self.brake_pub = rospy.Publisher('/vehicle/brake_cmd', BrakeCmd, queue_size=1)
 
+        rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cb)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.vel_cb)
+
         # TODO: Subscribe to /twist_cmd to get target linear and angular velocities, and /current_velocity to get the current velocity
         # Keep in mind the following:
         #   - We are assuming that the road is flat, so only angular.z velocity matters
@@ -38,9 +42,11 @@ class DBWNode(object):
         while not rospy.is_shutdown():
             if self.current_linear_velocity != None and self.target_linear_velocity != None and self.target_angular_velocity != None:
                 # TODO Fix both controllers and then uncomment
-                #throttle, brake = self.throttle_brake_controller.control(self.current_linear_velocity, self.target_linear_velocity) # TODO Fix control method
-                #steering_wheel_angle = self.steering_controller.control(self.current_linear_velocity, self.target_linear_velocity, self.target_angular_velocity) # TODO Fix control method
-                throttle, brake, steering_wheel_angle = 1., 0., 0.
+                print("test")
+                throttle, brake = self.throttle_brake_controller.control(self.current_linear_velocity, self.target_linear_velocity) # TODO Fix control method
+                steering_wheel_angle = self.steering_controller.control(self.current_linear_velocity, self.target_linear_velocity, self.target_angular_velocity) # TODO Fix control method
+                #throttle, brake = 10., 0.
+                #steering_wheel_angle = 0.7
                 self.publish(throttle, brake, steering_wheel_angle)
                 rate.sleep()
 
@@ -59,6 +65,13 @@ class DBWNode(object):
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
+
+    def twist_cb(self, msg):
+        self.target_linear_velocity = msg.twist.linear.x
+        self.target_angular_velocity = msg.twist.angular.z
+
+    def vel_cb(self, msg):
+        self.current_linear_velocity = msg.twist.linear.x
 
 
 if __name__ == '__main__':

@@ -25,7 +25,8 @@ RUN pip3 install \
         wsaccel==0.6.2 \
         empy \
         catkin_pkg \
-        rospkg
+        rospkg \
+        ultralytics
 
 # NEEDED?
 RUN sed -i 's/self.eio.send(sid, encoded_packet, binary=False)/self.eio.send(sid, encoded_packet)/g' /opt/conda/lib/python3.8/site-packages/socketio/server.py && \

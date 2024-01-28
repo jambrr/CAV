@@ -7,6 +7,8 @@ from std_msgs.msg import Int32
 from WaypointsDatabase import WaypointsDatabase
 import numpy as np
 
+import math
+
 '''
 This node will publish waypoints ahead of the car's current position.
 
@@ -59,8 +61,60 @@ class WaypointUpdater(object):
         # In phase 2: you need to adjust target speeds on waypoints in order to smoothly brake until the car reaches the waypoint
         # corresponding to the next red light's stop line (stored in self.next_traffic_light_stopline_index, == -1 if no next traffic light).
         # Advice: make sure to complete dbw_node and have the car driving correctly while ignoring traffic lights before you tackle phase 2 
+        # Get the current waypoint index
+
         msg = Lane()
+        closest_idx = self.waypoints_db.get_next_closest_idx(self.current_car_position)
+        farthest_idx = int(closest_idx + self.N)
+        base_waypoints_subset = self.waypoints_db.waypoints[int(closest_idx):farthest_idx]
+
+        if self.next_traffic_light_stopline_index == -1 or (self.next_traffic_light_stopline_index >= farthest_idx):
+            msg.waypoints = base_waypoints_subset
+        else:
+            msg.waypoints = self.decelerate_waypoints(base_waypoints_subset, closest_idx)
+
+        # Send the final waypoints to the final waypoints publisher
         self.final_waypoints_publisher.publish(msg)
+
+    def decelerate_waypoints(self, waypoints, closest_idx):
+        temp = []
+
+        for i, wp in enumerate(waypoints):
+            p = Waypoint()
+            p.pose = wp.pose
+
+            # Calculate the stop index to ensure the car's center is in front of the stop line
+            stop_idx = max(self.next_traffic_light_stopline_index - closest_idx - 2, 0)
+            
+            # Calculate the distance to the stop line, returns 0 if 'i' is beyond stop_idx
+            distance = self.distance(waypoints, i, stop_idx)
+            
+            # Calculate the velocity based on maximum deceleration to stop at the traffic light
+            velocity = math.sqrt(2 * self.max_deceleration * distance)
+            
+            # Set velocity to 0 if it's too small
+            if velocity < 1.0:
+                velocity = 0.0
+
+            # Apply speed constraint to respect the speed limit
+            p.twist.twist.linear.x = min(velocity, wp.twist.twist.linear.x)
+            temp.append(p)
+
+        return temp
+
+    def distance(self, waypoints, wp1, wp2):
+        dist = 0
+        dl = lambda a, b: math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2)
+        for i in range(wp1, wp2 + 1):
+            dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
+            wp1 = i
+        return dist
+    
+    def get_waypoint_velocity(self, waypoint):
+        return waypoint.twist.twist.linear.x
+
+    def set_waypoint_velocity(self, waypoints, waypoint, velocity):
+        waypoints[waypoint].twist.twist.linear.x = velocity
 
 if __name__ == '__main__':
     try:

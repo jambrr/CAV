@@ -21,11 +21,12 @@ class TLDetector(object):
         rospy.init_node('tl_detector')
         self.bridge = CvBridge()
 
-        self.use_ground_truth = True # TODO Set to False when you don't want to use ground truth traffic light information any longer
+        self.use_ground_truth = False # TODO Set to False when you don't want to use ground truth traffic light information any longer
         self.detector = TrafficLightDetector()
         self.state = TrafficLight.UNKNOWN
         self.state_count = 0
         self.last_state = TrafficLight.UNKNOWN
+        self.light_wp = None
 
         config = yaml.safe_load(rospy.get_param("/traffic_light_config"))
         self.stopline_positions = config['stop_line_positions']
@@ -71,10 +72,10 @@ class TLDetector(object):
         # Find the next closest traffic light along the track
         #     - First find the closest waypoint to the car
         #     - Next find the traffic light closest to this waypoint, but coming after it
-        _, car_wp_idx = self.waypoints_db.get_next_closest_idx(self.current_pose)
+        car_wp_idx = self.waypoints_db.get_next_closest_idx(self.current_pose)
         smallest_dist = len(self.waypoints_db.waypoints)
         for i, line in enumerate(self.stopline_positions): # Traffic light stop lines
-            _, line_wp_idx = self.waypoints_db.get_next_closest_idx((line[0], line[1]))
+            line_wp_idx = self.waypoints_db.get_next_closest_idx((line[0], line[1]))
             dist = line_wp_idx - car_wp_idx
             if dist >= 0 and dist < smallest_dist:
                 smallest_dist = dist
@@ -94,7 +95,11 @@ class TLDetector(object):
         elif self.state_count >= STATE_COUNT_THRESHOLD:
             self.last_state = self.state
             light_wp = light_wp if state == TrafficLight.RED else -1
+            self.light_wp = light_wp
             self.upcoming_red_light_pub.publish(Int32(light_wp))
+        else:
+            self.upcoming_red_light_pub.publish(Int32(self.light_wp))
+        
         self.state_count += 1
 
     def current_pose_callback(self, msg):
